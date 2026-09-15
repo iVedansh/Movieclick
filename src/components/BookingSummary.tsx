@@ -1,69 +1,83 @@
 import React from 'react';
+import { IndianRupee, Ticket } from 'lucide-react';
 import { Seat } from './SeatMap';
-import { IndianRupee } from 'lucide-react';
 
 interface BookingSummaryProps {
   selectedSeats: Seat[];
   eventPrice: number;
   onConfirm: () => void;
   isBooking: boolean;
+  movieTitle?: string;
+  cinemaName?: string;
+  showTime?: string;
 }
 
-export function BookingSummary({ selectedSeats, eventPrice, onConfirm, isBooking }: BookingSummaryProps) {
+export function BookingSummary({
+  selectedSeats,
+  eventPrice,
+  onConfirm,
+  isBooking,
+  movieTitle,
+  cinemaName,
+  showTime,
+}: BookingSummaryProps) {
   if (selectedSeats.length === 0) return null;
 
   const total = selectedSeats.reduce((sum, seat) => {
-    return sum + (Number(seat.price_override) || eventPrice);
+    const override = (seat as Seat & { price_override?: number }).price_override;
+    return sum + (Number(override) || Number(eventPrice));
   }, 0);
 
   return (
-    <div className="bg-white dark:bg-gray-900 rounded-3xl p-6 border border-gray-100 dark:border-gray-800 shadow-xl shadow-gray-200/50 dark:shadow-none sticky top-6">
-      <h3 className="text-lg font-bold mb-6 flex items-center justify-between">
-        Booking Summary
-        <span className="bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400 text-xs py-1 px-2 rounded-full">
-          {selectedSeats.length} {selectedSeats.length === 1 ? 'Seat' : 'Seats'}
-        </span>
-      </h3>
-      
-      <div className="space-y-4 mb-6 max-h-[300px] overflow-y-auto pr-2">
-        {selectedSeats.map(seat => (
-          <div key={seat.id} className="flex justify-between items-center text-sm p-3 bg-gray-50 dark:bg-gray-800/50 rounded-xl">
-            <div>
-              <p className="font-semibold">{seat.label}</p>
-              <p className="text-xs text-gray-500 capitalize">{seat.category}</p>
-            </div>
-            <div className="font-medium flex items-center">
-              <IndianRupee className="w-3 h-3 mr-0.5 text-gray-400" />
-              {Number(seat.price_override) || eventPrice}
-            </div>
-          </div>
-        ))}
-      </div>
-      
-      <div className="border-t border-gray-100 dark:border-gray-800 pt-4 mb-6">
-        <div className="flex justify-between items-center text-lg font-bold">
-          <span>Total</span>
-          <span className="flex items-center text-blue-600 dark:text-blue-400">
-            <IndianRupee className="w-5 h-5 mr-0.5" />
-            {total}
-          </span>
+    <aside className="sticky top-6 overflow-hidden rounded-2xl border border-gray-200 bg-white shadow-lg">
+      <div className="bg-[#242424] px-5 py-4 text-white">
+        <div className="flex items-center gap-2">
+          <Ticket className="h-5 w-5 text-[#f84464]" />
+          <h3 className="font-bold">Booking Summary</h3>
         </div>
+        {movieTitle && <p className="mt-2 truncate text-sm font-semibold text-white/90">{movieTitle}</p>}
+        {cinemaName && <p className="mt-1 truncate text-xs text-white/60">{cinemaName}{showTime ? ` • ${showTime}` : ''}</p>}
       </div>
-      
-      <button
-        onClick={onConfirm}
-        disabled={isBooking}
-        className="w-full bg-blue-600 hover:bg-blue-700 text-white font-semibold py-4 rounded-xl transition-all disabled:opacity-70 disabled:cursor-not-allowed flex justify-center items-center gap-2 shadow-lg shadow-blue-500/30 hover:shadow-blue-500/50"
-      >
-        {isBooking ? (
-          <>
-            <div className="w-5 h-5 border-2 border-white/30 border-t-white rounded-full animate-spin" />
-            Confirming...
-          </>
-        ) : (
-          'Confirm Booking'
-        )}
-      </button>
-    </div>
+
+      <div className="p-5">
+        <div className="mb-5 space-y-2">
+          {selectedSeats.map((seat) => {
+            const override = (seat as Seat & { price_override?: number }).price_override;
+            const seatPrice = Number(override) || Number(eventPrice);
+            return (
+              <div key={seat.id} className="flex items-center justify-between rounded-xl bg-gray-50 px-3 py-3 text-sm">
+                <div>
+                  <p className="font-bold text-gray-900">{seat.label}</p>
+                  <p className="text-xs capitalize text-gray-500">{seat.category} seat</p>
+                </div>
+                <span className="flex items-center font-semibold text-gray-800">
+                  <IndianRupee className="mr-0.5 h-3.5 w-3.5" />{seatPrice}
+                </span>
+              </div>
+            );
+          })}
+        </div>
+
+        <div className="border-t border-dashed border-gray-200 pt-4">
+          <div className="flex items-center justify-between text-base font-bold text-gray-900">
+            <span>Total Amount</span>
+            <span className="flex items-center text-[#e83f57]">
+              <IndianRupee className="mr-0.5 h-4 w-4" />{total}
+            </span>
+          </div>
+        </div>
+
+        <button
+          onClick={onConfirm}
+          disabled={isBooking}
+          className="mt-5 flex w-full items-center justify-center gap-2 rounded-xl bg-[#f84464] py-3.5 font-bold text-white shadow-lg shadow-red-500/20 transition hover:bg-[#e63858] disabled:cursor-not-allowed disabled:opacity-60"
+        >
+          {isBooking ? (
+            <><span className="h-4 w-4 animate-spin rounded-full border-2 border-white/30 border-t-white" /> Confirming...</>
+          ) : 'Proceed to Payment'}
+        </button>
+        <p className="mt-3 text-center text-[11px] text-gray-400">Prototype checkout • no real payment is processed</p>
+      </div>
+    </aside>
   );
 }
