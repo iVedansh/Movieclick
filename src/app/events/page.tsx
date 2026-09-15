@@ -2,7 +2,7 @@ import { supabase } from '@/lib/supabaseClient';
 import { EventCard } from '@/components/EventCard';
 import { EventSearch } from '@/components/EventSearch';
 import Link from 'next/link';
-import { Plus } from 'lucide-react';
+import { Film, Search, Ticket, ChevronRight } from 'lucide-react';
 
 export const revalidate = 0;
 
@@ -13,76 +13,60 @@ export default async function EventsPage({
 }) {
   const resolvedParams = await searchParams;
   const search = typeof resolvedParams.search === 'string' ? resolvedParams.search : '';
-
   let query = supabase.from('events').select('*').order('starts_at', { ascending: true });
-
-  if (search) {
-    query = query.or(`title.ilike.%${search}%,venue.ilike.%${search}%`);
-  }
-
+  if (search) query = query.or(`title.ilike.%${search}%,venue.ilike.%${search}%`);
   const { data: events, error } = await query;
 
   return (
-    <div className="min-h-screen bg-gray-50/50 dark:bg-gray-950 p-6 md:p-12">
-      <div className="max-w-7xl mx-auto">
-        <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-6 mb-12">
-          <h1 className="text-4xl font-black text-gray-900 dark:text-white tracking-tight">Upcoming Events</h1>
-          <div className="flex flex-col sm:flex-row gap-4 w-full sm:w-auto">
-            <EventSearch />
-            <Link href="/events/new" className="flex items-center justify-center gap-2 bg-blue-600 hover:bg-blue-700 text-white px-6 py-3 rounded-xl font-semibold transition-all shadow-lg shadow-blue-500/30 hover:shadow-blue-500/50 hover:-translate-y-0.5 whitespace-nowrap">
-              <Plus className="w-5 h-5" />
-              <span className="hidden sm:inline">Create Event</span>
-            </Link>
+    <main className="min-h-screen bg-[#080808] text-white">
+      <nav className="sticky top-0 z-30 border-b border-white/10 bg-[#080808]/85 backdrop-blur-xl">
+        <div className="mx-auto flex max-w-7xl items-center justify-between px-5 py-4">
+          <Link href="/events" className="flex items-center gap-2.5 text-xl font-black tracking-tight">
+            <span className="flex h-9 w-9 items-center justify-center rounded-xl bg-red-600 shadow-lg shadow-red-600/20"><Film className="h-5 w-5" /></span>
+            Movie<span className="text-red-500">Click</span>
+          </Link>
+          <div className="flex items-center gap-5 text-sm font-semibold text-zinc-300">
+            <Link href="/events" className="text-white">Movies</Link>
+            <Link href="/my-bookings" className="flex items-center gap-1.5 hover:text-white"><Ticket className="h-4 w-4" /> My Bookings</Link>
           </div>
         </div>
+      </nav>
 
-        {error && (
-          <div className="bg-red-50 dark:bg-red-900/20 text-red-600 dark:text-red-400 p-4 rounded-2xl mb-8 border border-red-100 dark:border-red-800">
-            Error loading events: {error.message}
+      <section className="relative overflow-hidden border-b border-white/10">
+        <div className="absolute inset-0 bg-[radial-gradient(circle_at_75%_35%,rgba(220,38,38,.22),transparent_38%),radial-gradient(circle_at_20%_80%,rgba(127,29,29,.16),transparent_35%)]" />
+        <div className="relative mx-auto max-w-7xl px-5 py-16 sm:py-24">
+          <p className="mb-4 text-sm font-bold uppercase tracking-[.3em] text-red-500">Your cinema. Your seats.</p>
+          <h1 className="max-w-3xl text-5xl font-black leading-[.95] tracking-tight sm:text-7xl">Movies worth <span className="text-red-500">watching.</span></h1>
+          <p className="mt-6 max-w-2xl text-base leading-7 text-zinc-400 sm:text-lg">Discover what&apos;s playing, pick your showtime, choose your seats and book in a few clicks.</p>
+          <div className="mt-8 flex w-full max-w-xl items-center gap-3 rounded-2xl border border-white/10 bg-white/[.06] p-2 backdrop-blur-md">
+            <Search className="ml-3 h-5 w-5 text-zinc-500" />
+            <div className="flex-1"><EventSearch /></div>
           </div>
-        )}
+        </div>
+      </section>
 
+      <section className="mx-auto max-w-7xl px-5 py-10 sm:py-14">
+        <div className="mb-8 flex items-end justify-between">
+          <div><p className="mb-2 text-xs font-bold uppercase tracking-[.25em] text-red-500">MovieClick</p><h2 className="text-3xl font-black sm:text-4xl">Now Showing</h2></div>
+          <span className="hidden text-sm text-zinc-500 sm:block">{events?.length || 0} movies available</span>
+        </div>
+        {error && <div className="rounded-2xl border border-red-500/20 bg-red-950/30 p-5 text-red-300">Unable to load movies: {error.message}</div>}
         {!events?.length && !error ? (
-          <div className="bg-white dark:bg-gray-900 rounded-[2rem] p-16 text-center border border-gray-100 dark:border-gray-800 shadow-xl shadow-gray-200/50 dark:shadow-none">
-            <div className="w-24 h-24 bg-gray-100 dark:bg-gray-800 rounded-full flex items-center justify-center mx-auto mb-6">
-                <CalendarIcon className="w-10 h-10 text-gray-400" />
-            </div>
-            <h3 className="text-2xl font-bold text-gray-900 dark:text-white mb-3">No events found</h3>
-            <p className="text-gray-500 dark:text-gray-400 mb-8 max-w-md mx-auto">Be the first to create an amazing event on EventHive and start selling tickets instantly.</p>
-            <Link href="/events/new" className="inline-flex items-center gap-2 bg-blue-600 text-white px-8 py-4 rounded-xl font-bold transition-all shadow-lg hover:bg-blue-700 hover:-translate-y-1">
-              Create an Event
-            </Link>
+          <div className="rounded-3xl border border-white/10 bg-zinc-900 p-14 text-center">
+            <Film className="mx-auto mb-5 h-12 w-12 text-zinc-600" /><h3 className="text-2xl font-bold">No movies found</h3>
+            <p className="mx-auto mt-2 max-w-md text-zinc-500">Try another search or add a movie from the existing event management flow.</p>
           </div>
         ) : (
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-8">
-            {events?.map((event) => (
-              <EventCard key={event.id} {...event} />
-            ))}
-          </div>
+          <div className="grid grid-cols-2 gap-4 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5">{events?.map((event) => <EventCard key={event.id} {...event} />)}</div>
         )}
-      </div>
-    </div>
-  );
-}
+      </section>
 
-function CalendarIcon(props: React.SVGProps<SVGSVGElement>) {
-  return (
-    <svg
-      {...props}
-      xmlns="http://www.w3.org/2000/svg"
-      width="24"
-      height="24"
-      viewBox="0 0 24 24"
-      fill="none"
-      stroke="currentColor"
-      strokeWidth="2"
-      strokeLinecap="round"
-      strokeLinejoin="round"
-    >
-      <rect width="18" height="18" x="3" y="4" rx="2" ry="2" />
-      <line x1="16" x2="16" y1="2" y2="6" />
-      <line x1="8" x2="8" y1="2" y2="6" />
-      <line x1="3" x2="21" y1="10" y2="10" />
-    </svg>
-  )
+      <section className="mx-auto max-w-7xl px-5 pb-16">
+        <div className="flex flex-col items-start justify-between gap-5 rounded-3xl border border-white/10 bg-gradient-to-r from-zinc-900 to-red-950/30 p-7 sm:flex-row sm:items-center sm:p-9">
+          <div><h3 className="text-2xl font-black">Ready for your next movie?</h3><p className="mt-1 text-zinc-400">Pick a movie above and choose your perfect seats.</p></div>
+          <Link href="/my-bookings" className="flex items-center gap-2 rounded-xl bg-white px-5 py-3 text-sm font-bold text-black transition hover:bg-zinc-200">View my bookings <ChevronRight className="h-4 w-4" /></Link>
+        </div>
+      </section>
+    </main>
+  );
 }
