@@ -1,22 +1,29 @@
 'use client';
 
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import { supabase } from '@/lib/supabaseClient';
 import { SeatMap, Seat } from '@/components/SeatMap';
 import { SeatLegend } from '@/components/SeatLegend';
 import { BookingSummary } from '@/components/BookingSummary';
 import { useParams, useRouter } from 'next/navigation';
-import { ArrowLeft, Calendar, MapPin, IndianRupee } from 'lucide-react';
+import { ArrowLeft, CalendarDays, ChevronDown, Info, MapPin, Star, Ticket } from 'lucide-react';
 import Link from 'next/link';
+
+const fallbackCinemas = [
+  { id: '1', name: 'Cinepolis: BSR Mall, OMR, Thoraipakkam', brand: 'Cinepolis', location: 'OMR, Chennai' },
+  { id: '2', name: 'HDFC Millennium PVR: Escape-Express Avenue Mall', brand: 'PVR', location: 'Royapettah, Chennai' },
+  { id: '3', name: 'PVR: Heritage RSL ECR, Chennai', brand: 'PVR', location: 'ECR, Chennai' },
+];
 
 export default function EventDetailPage() {
   const params = useParams();
   const eventId = params.eventId as string;
   const router = useRouter();
-
   const [event, setEvent] = useState<any>(null);
   const [seats, setSeats] = useState<Seat[]>([]);
   const [selectedSeatIds, setSelectedSeatIds] = useState<string[]>([]);
+  const [showtimes, setShowtimes] = useState<any[]>([]);
+  const [selectedShow, setSelectedShow] = useState<any>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [bookingError, setBookingError] = useState('');
@@ -25,10 +32,11 @@ export default function EventDetailPage() {
   useEffect(() => {
     async function fetchData() {
       try {
-        const [eventRes, seatsRes, bookingsRes] = await Promise.all([
+        const [eventRes, seatsRes, bookingsRes, showsRes] = await Promise.all([
           supabase.from('events').select('*').eq('id', eventId).single(),
           supabase.from('seats').select('*').eq('event_id', eventId).order('seat_row').order('seat_col'),
-          supabase.from('bookings').select('seat_id, status').eq('event_id', eventId).in('status', ['booked', 'held'])
+          supabase.from('bookings').select('seat_id, status').eq('event_id', eventId).in('status', ['booked', 'held']),
+          supabase.from('showtimes').select('*, cinemas(*)').eq('event_id', eventId).order('show_time'),
         ]);
 
         if (eventRes.error) throw eventRes.error;
@@ -36,173 +44,103 @@ export default function EventDetailPage() {
         if (bookingsRes.error) throw bookingsRes.error;
 
         setEvent(eventRes.data);
-        
-        const bookedSeatIds = bookingsRes.data.map(b => b.seat_id);
-        const processedSeats = seatsRes.data.map(seat => ({
-          ...seat,
-          status: bookedSeatIds.includes(seat.id) ? 'booked' : 'available'
-        })) as Seat[];
+        const bookedSeatIds = (bookingsRes.data || []).map((b: any) => b.seat_id);
+        setSeats((seatsRes.data || []).map((seat: any) => ({ ...seat, status: bookedSeatIds.includes(seat.id) ? 'booked' : 'available' })) as Seat[]);
 
-        setSeats(processedSeats);
+        const databaseShows = showsRes.error ? [] : (showsRes.data || []);
+        const fallback = [
+          { id: 'fallback-1', cinema: { name: eventRes.data.venue || fallbackCinemas[2].name }, show_time: eventRes.data.starts_at, language: 'Hindi', format: '2D', screen_name: 'Screen 1' },
+          { id: 'fallback-2', cinema: { name: fallbackCinemas[0].name }, show_time: new Date(new Date(eventRes.data.starts_at).getTime() - 20 * 60000).toISOString(), language: 'Hindi', format: '2D', screen_name: 'Screen 2' },
+        ];
+        const finalShows = databaseShows.length ? databaseShows : fallback;
+        setShowtimes(finalShows);
+        setSelectedShow(finalShows[0]);
       } catch (err: any) {
-        setError(err.message || 'Failed to load event details');
+        setError(err.message || 'Failed to load movie');
       } finally {
         setLoading(false);
       }
     }
-
     fetchData();
-
-    // Bonus: Realtime updates
-    const channel = supabase
-      .channel(`event-${eventId}-bookings`)
-      .on('postgres_changes', { 
-        event: '*', 
-        schema: 'public', 
-        table: 'bookings', 
-        filter: `event_id=eq.${eventId}` 
-      }, () => {
-        // Simple re-fetch on change
-        fetchData();
-      })
-      .subscribe();
-
-    return () => {
-      supabase.removeChannel(channel);
-    };
   }, [eventId]);
 
   const handleSeatClick = (seatId: string) => {
     setBookingError('');
-    setSelectedSeatIds(prev => {
-      if (prev.includes(seatId)) {
-        return prev.filter(id => id !== seatId);
-      }
-      if (prev.length >= 4) {
-        return prev;
-      }
-      return [...prev, seatId];
-    });
+    setSelectedSeatIds((prev) => prev.includes(seatId) ? prev.filter((id) => id !== seatId) : prev.length >= 4 ? prev : [...prev, seatId]);
   };
 
   const handleConfirmBooking = async () => {
-    if (selectedSeatIds.length === 0) return;
-    
+    if (!selectedSeatIds.length) return;
     setIsBooking(true);
     setBookingError('');
-
     const { data: userData } = await supabase.auth.getUser();
     if (!userData?.user) {
-      setBookingError('You must be logged in to book seats');
+      setBookingError('Please log in before booking your seats.');
       setIsBooking(false);
       return;
     }
-
-    const { data, error } = await supabase.rpc('book_seats', {
-      p_event_id: eventId,
-      p_seat_ids: selectedSeatIds,
-    });
-
+    const { error: rpcError } = await supabase.rpc('book_seats', { p_event_id: eventId, p_seat_ids: selectedSeatIds });
     setIsBooking(false);
-
-    if (error) {
-      setBookingError(error.message);
-    } else {
-      router.push('/my-bookings');
-    }
+    if (rpcError) setBookingError(rpcError.message);
+    else router.push('/my-bookings');
   };
 
-  if (loading) {
-    return <div className="min-h-screen flex items-center justify-center bg-gray-50 dark:bg-gray-950">
-        <div className="w-12 h-12 border-4 border-blue-200 border-t-blue-600 rounded-full animate-spin"></div>
-    </div>;
-  }
+  const selectedSeats = seats.filter((s) => selectedSeatIds.includes(s.id));
+  const movieDate = event ? new Date(event.starts_at) : new Date();
+  const dateOptions = Array.from({ length: 7 }, (_, i) => new Date(movieDate.getTime() + i * 86400000));
 
-  if (error || !event) {
-    return <div className="min-h-screen flex flex-col items-center justify-center bg-gray-50 dark:bg-gray-950 p-12 text-center">
-      <div className="bg-red-50 text-red-600 p-6 rounded-2xl border border-red-100 max-w-md w-full">
-        <h3 className="font-bold text-lg mb-2">Oops!</h3>
-        <p>{error || 'Event not found'}</p>
-        <Link href="/events" className="mt-4 inline-block text-blue-600 hover:underline font-medium">Return to events</Link>
-      </div>
-    </div>;
-  }
-
-  const selectedSeats = seats.filter(s => selectedSeatIds.includes(s.id));
-  const date = new Date(event.starts_at).toLocaleDateString('en-US', {
-    weekday: 'long', month: 'long', day: 'numeric', hour: '2-digit', minute: '2-digit'
-  });
+  if (loading) return <div className="flex min-h-screen items-center justify-center bg-[#f5f5f7]"><div className="h-10 w-10 animate-spin rounded-full border-4 border-red-100 border-t-[#e83f57]" /></div>;
+  if (error || !event) return <div className="flex min-h-screen flex-col items-center justify-center bg-[#f5f5f7] p-8"><div className="rounded-xl bg-white p-8 text-center shadow"><h2 className="text-xl font-bold">Movie not found</h2><p className="mt-2 text-gray-500">{error}</p><Link href="/events" className="mt-5 inline-block text-[#e83f57]">Back to movies</Link></div></div>;
 
   return (
-    <div className="min-h-screen bg-gray-50 dark:bg-gray-950 pb-20">
-      {/* Header section */}
-      <div className="bg-white dark:bg-gray-900 border-b border-gray-200 dark:border-gray-800 pt-12 pb-8 px-6 mb-8 shadow-sm relative overflow-hidden">
-        <div className="absolute top-0 right-0 w-[500px] h-[500px] bg-blue-500/5 blur-[120px] rounded-full pointer-events-none" />
-        
-        <div className="max-w-7xl mx-auto relative z-10">
-          <Link href="/events" className="inline-flex items-center text-sm font-medium text-gray-500 hover:text-gray-900 dark:hover:text-white mb-6 transition-colors">
-            <ArrowLeft className="w-4 h-4 mr-1" />
-            Back to events
-          </Link>
-          
-          <h1 className="text-4xl md:text-5xl font-black text-gray-900 dark:text-white mb-4 tracking-tight">{event.title}</h1>
-          {event.description && (
-            <p className="text-gray-600 dark:text-gray-400 mb-6 max-w-3xl text-lg leading-relaxed">{event.description}</p>
-          )}
-          
-          <div className="flex flex-wrap gap-4 text-sm font-semibold text-gray-700 dark:text-gray-300 mt-8">
-            <div className="flex items-center gap-2 bg-gray-100 dark:bg-gray-800 px-5 py-2.5 rounded-full shadow-sm">
-              <Calendar className="w-4 h-4 text-blue-500" />
-              <span>{date}</span>
-            </div>
-            <div className="flex items-center gap-2 bg-gray-100 dark:bg-gray-800 px-5 py-2.5 rounded-full shadow-sm">
-              <MapPin className="w-4 h-4 text-rose-500" />
-              <span>{event.venue}</span>
-            </div>
-            <div className="flex items-center gap-2 bg-blue-50 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300 px-5 py-2.5 rounded-full shadow-sm">
-              <IndianRupee className="w-4 h-4" />
-              <span>Base price: {event.price === 0 ? 'Free' : event.price}</span>
-            </div>
+    <main className="min-h-screen bg-[#f5f5f7] text-[#222]">
+      <header className="border-b border-black/10 bg-white">
+        <div className="mx-auto flex max-w-7xl items-center gap-4 px-5 py-3">
+          <Link href="/events" className="rounded-full p-2 hover:bg-gray-100"><ArrowLeft className="h-5 w-5" /></Link>
+          <div><h1 className="text-lg font-bold">{event.title}</h1><p className="text-xs text-gray-500">MovieClick • Chennai</p></div>
+          <Link href="/my-bookings" className="ml-auto text-sm font-semibold text-[#e83f57]">My Bookings</Link>
+        </div>
+      </header>
+
+      <section className="border-b border-gray-200 bg-white">
+        <div className="mx-auto max-w-7xl px-5 py-6">
+          <div className="flex flex-col gap-5 md:flex-row md:items-end">
+            <img src={event.cover_image_url || 'https://placehold.co/180x260/18181b/ffffff?text=MovieClick'} alt="" className="hidden h-44 w-28 rounded-lg object-cover shadow md:block" />
+            <div className="flex-1"><h2 className="text-3xl font-bold md:text-4xl">{event.title}</h2><div className="mt-3 flex flex-wrap gap-2 text-sm text-gray-600"><span className="rounded-full border px-3 py-1">Movie runtime: 3h 17m</span><span className="rounded-full border px-3 py-1">A</span><span className="rounded-full border px-3 py-1">Action</span><span className="rounded-full border px-3 py-1">Crime</span><span className="rounded-full border px-3 py-1">Thriller</span></div><p className="mt-4 max-w-3xl text-sm text-gray-500">{event.description || 'Book your cinema tickets and choose your preferred seats.'}</p></div>
           </div>
         </div>
-      </div>
+        <div className="overflow-x-auto border-t"><div className="mx-auto flex max-w-7xl min-w-max px-5">
+          {dateOptions.map((d, i) => <button key={i} className={`w-20 border-b-2 px-2 py-4 text-center ${i === 0 ? 'border-[#e83f57] text-[#e83f57]' : 'border-transparent text-gray-600'}`}><div className="text-xs font-semibold uppercase">{d.toLocaleDateString('en-US', { weekday: 'short' })}</div><div className="text-xl font-bold">{d.getDate()}</div><div className="text-[10px] uppercase">{d.toLocaleDateString('en-US', { month: 'short' })}</div></button>)}
+        </div></div>
+      </section>
 
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 grid grid-cols-1 lg:grid-cols-3 gap-8">
-        <div className="lg:col-span-2">
-          <div className="mb-6 flex justify-between items-end">
-            <div>
-              <h2 className="text-2xl font-bold text-gray-900 dark:text-white">Select Your Seats</h2>
-              <p className="text-gray-500 dark:text-gray-400 mt-1">You can select up to {4 - selectedSeatIds.length} more {4 - selectedSeatIds.length === 1 ? 'seat' : 'seats'}.</p>
-            </div>
+      <section className="mx-auto max-w-7xl px-5 py-6">
+        <div className="mb-4 flex items-center gap-3 text-sm text-gray-600"><span className="rounded border px-3 py-1 font-medium">Hindi - 2D</span><span><Info className="mr-1 inline h-4 w-4" />Cancellation available on selected shows</span></div>
+        <div className="space-y-3">
+          {showtimes.map((show) => {
+            const active = selectedShow?.id === show.id;
+            const time = new Date(show.show_time).toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' });
+            return <div key={show.id} className={`rounded-xl border bg-white p-5 transition ${active ? 'border-[#e83f57] shadow-sm' : 'border-gray-200'}`}>
+              <div className="flex flex-col gap-4 md:flex-row md:items-center">
+                <div className="flex-1"><div className="flex items-center gap-2 text-lg font-semibold"><span className="rounded-md border px-2 py-1 text-xs text-[#e83f57]">{show.cinemas?.brand || 'Cinema'}</span>{show.cinemas?.name || show.cinema?.name || event.venue}</div><p className="mt-1 text-sm text-gray-500">Non-cancellable • {show.screen_name || 'Screen 1'}</p></div>
+                <button onClick={() => { setSelectedShow(show); setSelectedSeatIds([]); }} className={`min-w-28 rounded-md border-2 px-5 py-3 text-sm font-semibold transition ${active ? 'border-[#e83f57] bg-[#e83f57] text-white' : 'border-green-600 text-gray-800 hover:bg-green-50'}`}>{time}</button>
+                <button onClick={() => { setSelectedShow(show); setSelectedSeatIds([]); document.getElementById('seat-section')?.scrollIntoView({ behavior: 'smooth' }); }} className="rounded-md bg-[#e83f57] px-5 py-3 text-sm font-bold text-white hover:bg-[#d92f49]">Select Seats</button>
+              </div>
+            </div>;
+          })}
+        </div>
+      </section>
+
+      <section id="seat-section" className="border-t bg-white py-8">
+        <div className="mx-auto max-w-7xl px-5">
+          <div className="mb-5 flex flex-col justify-between gap-2 md:flex-row md:items-end"><div><p className="text-xs font-semibold uppercase tracking-wider text-[#e83f57]">Step 2 of 2</p><h2 className="mt-1 text-2xl font-bold">Select Seats</h2><p className="text-sm text-gray-500">{selectedShow ? `${selectedShow.cinemas?.name || selectedShow.cinema?.name || event.venue} • ${new Date(selectedShow.show_time).toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' })}` : 'Choose a showtime above'}</p></div><div className="flex items-center gap-2 text-sm text-gray-500"><MapPin className="h-4 w-4" /> Chennai <ChevronDown className="h-4 w-4" /></div></div>
+          {bookingError && <div className="mb-5 rounded-lg border border-red-200 bg-red-50 p-3 text-sm font-medium text-red-600">{bookingError}</div>}
+          <div className="grid gap-6 lg:grid-cols-[1fr_320px]">
+            <div><SeatMap seats={seats} selectedSeatIds={selectedSeatIds} onSeatClick={handleSeatClick} maxSeats={4} /><SeatLegend /><div className="mt-5 flex items-center justify-center gap-6 text-xs text-gray-500"><span><i className="mr-1 inline-block h-3 w-3 rounded border border-green-500" />Available</span><span><i className="mr-1 inline-block h-3 w-3 rounded bg-gray-200" />Sold</span><span><i className="mr-1 inline-block h-3 w-3 rounded bg-green-600" />Selected</span></div></div>
+            <BookingSummary selectedSeats={selectedSeats} eventPrice={event.price} onConfirm={handleConfirmBooking} isBooking={isBooking} />
           </div>
-          
-          {bookingError && (
-            <div className="bg-red-50 dark:bg-red-900/20 text-red-600 dark:text-red-400 p-4 rounded-xl mb-6 border border-red-100 dark:border-red-800/50 flex items-start gap-3 shadow-sm animate-in fade-in slide-in-from-top-2">
-                <svg className="w-5 h-5 flex-shrink-0 mt-0.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
-                </svg>
-                <span className="font-medium">{bookingError}</span>
-            </div>
-          )}
-
-          <SeatMap 
-            seats={seats} 
-            selectedSeatIds={selectedSeatIds} 
-            onSeatClick={handleSeatClick} 
-            maxSeats={4} 
-          />
-          <SeatLegend />
         </div>
-        
-        <div className="lg:col-span-1">
-          <BookingSummary 
-            selectedSeats={selectedSeats}
-            eventPrice={event.price}
-            onConfirm={handleConfirmBooking}
-            isBooking={isBooking}
-          />
-        </div>
-      </div>
-    </div>
+      </section>
+    </main>
   );
 }
