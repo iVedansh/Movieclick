@@ -1,5 +1,5 @@
 import Link from 'next/link';
-import { Github, Mail, MapPin, Ticket } from 'lucide-react';
+import { ExternalLink, Mail, MapPin, Ticket } from 'lucide-react';
 
 export default function SiteFooter() {
   return (
@@ -14,8 +14,12 @@ export default function SiteFooter() {
               Discover movies, live events and sports, choose your experience and book with ease.
             </p>
             <div className="mt-5 flex gap-3">
-              <a href="https://github.com/iVedansh" target="_blank" rel="noreferrer" aria-label="GitHub" className="rounded-full border border-white/10 p-2.5 transition hover:bg-white/10"><Github className="h-4 w-4" /></a>
-              <a href="mailto:vedanshmishra467@gmail.com" aria-label="Email" className="rounded-full border border-white/10 p-2.5 transition hover:bg-white/10"><Mail className="h-4 w-4" /></a>
+              <a href="https://github.com/iVedansh" target="_blank" rel="noreferrer" aria-label="GitHub" className="rounded-full border border-white/10 p-2.5 transition hover:bg-white/10">
+                <ExternalLink className="h-4 w-4" />
+              </a>
+              <a href="mailto:vedanshmishra467@gmail.com" aria-label="Email" className="rounded-full border border-white/10 p-2.5 transition hover:bg-white/10">
+                <Mail className="h-4 w-4" />
+              </a>
             </div>
           </div>
 
