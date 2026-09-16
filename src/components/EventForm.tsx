@@ -3,6 +3,7 @@
 import React from 'react';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
+import { z } from 'zod';
 import { eventSchema, EventFormData } from '@/lib/validation';
 
 interface EventFormProps {
@@ -16,7 +17,7 @@ export function EventForm({ onSubmit, isSubmitting }: EventFormProps) {
     register,
     handleSubmit,
     formState: { errors },
-  } = useForm<EventFormData>({
+  } = useForm<z.input<typeof eventSchema>, unknown, EventFormData>({
     resolver: zodResolver(eventSchema),
     defaultValues: {
       price: 0,
