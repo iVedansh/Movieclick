@@ -1,7 +1,10 @@
-import { createClient } from '@supabase/supabase-js';
+import { createClient, type SupabaseClient } from '@supabase/supabase-js';
 
-async function attemptBooking(client: ReturnType<typeof createClient>, eventId: string, seatId: string) {
-  return client.rpc('book_seats', { p_event_id: eventId, p_seat_ids: [seatId] });
+async function attemptBooking(client: SupabaseClient, eventId: string, seatId: string) {
+  return client.rpc('book_seats' as any, {
+    p_event_id: eventId,
+    p_seat_ids: [seatId],
+  } as any);
 }
 
 async function main() {
